@@ -1,0 +1,643 @@
+{
+  "service": {
+    "service": "legal-audit-pipeline",
+    "serviceObject": {
+      "name": "legal-audit-pipeline"
+    },
+    "provider": {
+      "name": "aws",
+      "runtime": "python3.12",
+      "stage": "staging",
+      "region": "us-east-1",
+      "environment": {
+        "STAGE": "staging",
+        "LOG_LEVEL": "INFO"
+      },
+      "iam": {
+        "role": {
+          "statements": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "sqs:SendMessage"
+              ],
+              "Resource": {
+                "Fn::GetAtt": [
+                  "AuditQueue",
+                  "Arn"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "versionFunctions": true,
+      "compiledCloudFormationTemplate": {
+        "AWSTemplateFormatVersion": "2010-09-09",
+        "Description": "The AWS CloudFormation template for this Serverless application",
+        "Resources": {
+          "IngestAuditLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+              "LogGroupName": "/aws/lambda/legal-audit-pipeline-staging-ingestAudit"
+            }
+          },
+          "ProcessAuditBatchLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+              "LogGroupName": "/aws/lambda/legal-audit-pipeline-staging-processAuditBatch"
+            }
+          },
+          "IamRoleLambdaExecution": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+              "AssumeRolePolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [
+                  {
+                    "Effect": "Allow",
+                    "Principal": {
+                      "Service": [
+                        "lambda.amazonaws.com"
+                      ]
+                    },
+                    "Action": [
+                      "sts:AssumeRole"
+                    ]
+                  }
+                ]
+              },
+              "Policies": [
+                {
+                  "PolicyName": {
+                    "Fn::Join": [
+                      "-",
+                      [
+                        "legal-audit-pipeline",
+                        "staging",
+                        "lambda"
+                      ]
+                    ]
+                  },
+                  "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                      {
+                        "Effect": "Allow",
+                        "Action": [
+                          "logs:CreateLogStream",
+                          "logs:CreateLogGroup",
+                          "logs:TagResource"
+                        ],
+                        "Resource": [
+                          {
+                            "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/legal-audit-pipeline-staging*:*"
+                          }
+                        ]
+                      },
+                      {
+                        "Effect": "Allow",
+                        "Action": [
+                          "logs:PutLogEvents"
+                        ],
+                        "Resource": [
+                          {
+                            "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/legal-audit-pipeline-staging*:*:*"
+                          }
+                        ]
+                      },
+                      {
+                        "$ref": "$[\"service\"][\"provider\"][\"iam\"][\"role\"][\"statements\"][0]"
+                      },
+                      {
+                        "Effect": "Allow",
+                        "Action": [
+                          "sqs:ReceiveMessage",
+                          "sqs:DeleteMessage",
+                          "sqs:GetQueueAttributes"
+                        ],
+                        "Resource": [
+                          {
+                            "Fn::GetAtt": [
+                              "AuditQueue",
+                              "Arn"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ],
+              "Path": "/",
+              "RoleName": {
+                "Fn::Join": [
+                  "-",
+                  [
+                    "legal-audit-pipeline",
+                    "staging",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    "lambdaRole"
+                  ]
+                ]
+              }
+            }
+          },
+          "IngestAuditLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+              "Code": {
+                "S3Bucket": "serverless-framework-deployments-us-east-1-489f64c2-2129",
+                "S3Key": "serverless/legal-audit-pipeline/staging/1783947631799-2026-07-13T13:00:31.799Z/legal-audit-pipeline.zip"
+              },
+              "Handler": "handler.ingest_audit",
+              "Runtime": "python3.12",
+              "FunctionName": "legal-audit-pipeline-staging-ingestAudit",
+              "MemorySize": 1024,
+              "Timeout": 6,
+              "Environment": {
+                "Variables": {
+                  "STAGE": "staging",
+                  "LOG_LEVEL": "INFO",
+                  "QUEUE_URL": {
+                    "Ref": "AuditQueue"
+                  }
+                }
+              },
+              "Role": {
+                "Fn::GetAtt": [
+                  "IamRoleLambdaExecution",
+                  "Arn"
+                ]
+              }
+            },
+            "DependsOn": [
+              "IngestAuditLogGroup"
+            ]
+          },
+          "ProcessAuditBatchLambdaFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+              "Code": {
+                "S3Bucket": "serverless-framework-deployments-us-east-1-489f64c2-2129",
+                "S3Key": "serverless/legal-audit-pipeline/staging/1783947631799-2026-07-13T13:00:31.799Z/legal-audit-pipeline.zip"
+              },
+              "Handler": "handler.process_audit_batch",
+              "Runtime": "python3.12",
+              "FunctionName": "legal-audit-pipeline-staging-processAuditBatch",
+              "MemorySize": 1024,
+              "Timeout": 6,
+              "Environment": {
+                "Variables": {
+                  "STAGE": "staging",
+                  "LOG_LEVEL": "INFO"
+                }
+              },
+              "Role": {
+                "Fn::GetAtt": [
+                  "IamRoleLambdaExecution",
+                  "Arn"
+                ]
+              }
+            },
+            "DependsOn": [
+              "ProcessAuditBatchLogGroup"
+            ]
+          },
+          "IngestAuditLambdaVersionKDsR0J4pu9uE8b8bd4b3CL6niF3ha26Gp62ueRLHfY": {
+            "Type": "AWS::Lambda::Version",
+            "DeletionPolicy": "Retain",
+            "Properties": {
+              "FunctionName": {
+                "Ref": "IngestAuditLambdaFunction"
+              },
+              "CodeSha256": "deF90zsH9WcTFJulBt0BklLyGu2aCIO+IU2dLElhJRk="
+            }
+          },
+          "ProcessAuditBatchLambdaVersion02JURpGNG1YbsJHlFsGC9yqzMiyZj8ptp7DpjVgA": {
+            "Type": "AWS::Lambda::Version",
+            "DeletionPolicy": "Retain",
+            "Properties": {
+              "FunctionName": {
+                "Ref": "ProcessAuditBatchLambdaFunction"
+              },
+              "CodeSha256": "deF90zsH9WcTFJulBt0BklLyGu2aCIO+IU2dLElhJRk="
+            }
+          },
+          "ApiGatewayRestApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+              "Name": "staging-legal-audit-pipeline",
+              "EndpointConfiguration": {
+                "Types": [
+                  "EDGE"
+                ]
+              },
+              "Policy": ""
+            }
+          },
+          "ApiGatewayResourceAudit": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+              "ParentId": {
+                "Fn::GetAtt": [
+                  "ApiGatewayRestApi",
+                  "RootResourceId"
+                ]
+              },
+              "PathPart": "audit",
+              "RestApiId": {
+                "Ref": "ApiGatewayRestApi"
+              }
+            }
+          },
+          "ApiGatewayResourceAuditSubmit": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+              "ParentId": {
+                "Ref": "ApiGatewayResourceAudit"
+              },
+              "PathPart": "submit",
+              "RestApiId": {
+                "Ref": "ApiGatewayRestApi"
+              }
+            }
+          },
+          "ApiGatewayMethodAuditSubmitOptions": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+              "AuthorizationType": "NONE",
+              "HttpMethod": "OPTIONS",
+              "MethodResponses": [
+                {
+                  "StatusCode": "200",
+                  "ResponseParameters": {
+                    "method.response.header.Access-Control-Allow-Origin": true,
+                    "method.response.header.Access-Control-Allow-Headers": true,
+                    "method.response.header.Access-Control-Allow-Methods": true
+                  },
+                  "ResponseModels": {}
+                }
+              ],
+              "RequestParameters": {},
+              "Integration": {
+                "Type": "MOCK",
+                "RequestTemplates": {
+                  "application/json": "{statusCode:200}"
+                },
+                "ContentHandling": "CONVERT_TO_TEXT",
+                "IntegrationResponses": [
+                  {
+                    "StatusCode": "200",
+                    "ResponseParameters": {
+                      "method.response.header.Access-Control-Allow-Origin": "'*'",
+                      "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,X-Amz-User-Agent,X-Amzn-Trace-Id'",
+                      "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,POST'"
+                    },
+                    "ResponseTemplates": {
+                      "application/json": ""
+                    }
+                  }
+                ]
+              },
+              "ResourceId": {
+                "Ref": "ApiGatewayResourceAuditSubmit"
+              },
+              "RestApiId": {
+                "Ref": "ApiGatewayRestApi"
+              }
+            }
+          },
+          "ApiGatewayMethodAuditSubmitPost": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+              "HttpMethod": "POST",
+              "RequestParameters": {},
+              "ResourceId": {
+                "Ref": "ApiGatewayResourceAuditSubmit"
+              },
+              "RestApiId": {
+                "Ref": "ApiGatewayRestApi"
+              },
+              "ApiKeyRequired": false,
+              "AuthorizationType": "NONE",
+              "Integration": {
+                "IntegrationHttpMethod": "POST",
+                "Type": "AWS_PROXY",
+                "Uri": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "arn:",
+                      {
+                        "Ref": "AWS::Partition"
+                      },
+                      ":apigateway:",
+                      {
+                        "Ref": "AWS::Region"
+                      },
+                      ":lambda:path/2015-03-31/functions/",
+                      {
+                        "Fn::GetAtt": [
+                          "IngestAuditLambdaFunction",
+                          "Arn"
+                        ]
+                      },
+                      "/invocations"
+                    ]
+                  ]
+                }
+              },
+              "MethodResponses": []
+            },
+            "DependsOn": [
+              "IngestAuditLambdaPermissionApiGateway"
+            ]
+          },
+          "ApiGatewayDeployment1783947614842": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "Properties": {
+              "RestApiId": {
+                "Ref": "ApiGatewayRestApi"
+              },
+              "StageName": "staging"
+            },
+            "DependsOn": [
+              "ApiGatewayMethodAuditSubmitOptions",
+              "ApiGatewayMethodAuditSubmitPost"
+            ]
+          },
+          "IngestAuditLambdaPermissionApiGateway": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+              "FunctionName": {
+                "Fn::GetAtt": [
+                  "IngestAuditLambdaFunction",
+                  "Arn"
+                ]
+              },
+              "Action": "lambda:InvokeFunction",
+              "Principal": "apigateway.amazonaws.com",
+              "SourceArn": {
+                "Fn::Join": [
+                  "",
+                  [
+                    "arn:",
+                    {
+                      "Ref": "AWS::Partition"
+                    },
+                    ":execute-api:",
+                    {
+                      "Ref": "AWS::Region"
+                    },
+                    ":",
+                    {
+                      "Ref": "AWS::AccountId"
+                    },
+                    ":",
+                    {
+                      "Ref": "ApiGatewayRestApi"
+                    },
+                    "/*/*"
+                  ]
+                ]
+              }
+            }
+          },
+          "ProcessAuditBatchEventSourceMappingSQSAuditQueue": {
+            "Type": "AWS::Lambda::EventSourceMapping",
+            "DependsOn": [
+              "IamRoleLambdaExecution"
+            ],
+            "Properties": {
+              "BatchSize": 5,
+              "EventSourceArn": {
+                "Fn::GetAtt": [
+                  "AuditQueue",
+                  "Arn"
+                ]
+              },
+              "FunctionName": {
+                "Fn::GetAtt": [
+                  "ProcessAuditBatchLambdaFunction",
+                  "Arn"
+                ]
+              },
+              "Enabled": true
+            }
+          },
+          "AuditQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+              "QueueName": "legal-audit-pipeline-audit-queue-staging",
+              "VisibilityTimeout": 90,
+              "RedrivePolicy": {
+                "Fn::Sub": [
+                  "{\"deadLetterTargetArn\":\"${dlqArn}\",\"maxReceiveCount\":3}",
+                  {
+                    "dlqArn": {
+                      "Fn::GetAtt": [
+                        "AuditDLQ",
+                        "Arn"
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "AuditDLQ": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+              "QueueName": "legal-audit-pipeline-audit-dlq-staging"
+            }
+          }
+        },
+        "Outputs": {
+          "ServerlessDeploymentBucketName": {
+            "Value": "serverless-framework-deployments-us-east-1-489f64c2-2129",
+            "Export": {
+              "Name": "sls-legal-audit-pipeline-staging-ServerlessDeploymentBucketName"
+            }
+          },
+          "IngestAuditLambdaFunctionQualifiedArn": {
+            "Description": "Current Lambda function version",
+            "Value": {
+              "Ref": "IngestAuditLambdaVersionKDsR0J4pu9uE8b8bd4b3CL6niF3ha26Gp62ueRLHfY"
+            },
+            "Export": {
+              "Name": "sls-legal-audit-pipeline-staging-IngestAuditLambdaFunctionQualifiedArn"
+            }
+          },
+          "ProcessAuditBatchLambdaFunctionQualifiedArn": {
+            "Description": "Current Lambda function version",
+            "Value": {
+              "Ref": "ProcessAuditBatchLambdaVersion02JURpGNG1YbsJHlFsGC9yqzMiyZj8ptp7DpjVgA"
+            },
+            "Export": {
+              "Name": "sls-legal-audit-pipeline-staging-ProcessAuditBatchLambdaFunctionQualifiedArn"
+            }
+          },
+          "ServiceEndpoint": {
+            "Description": "URL of the service endpoint",
+            "Value": {
+              "Fn::Join": [
+                "",
+                [
+                  "https://",
+                  {
+                    "Ref": "ApiGatewayRestApi"
+                  },
+                  ".execute-api.",
+                  {
+                    "Ref": "AWS::Region"
+                  },
+                  ".",
+                  {
+                    "Ref": "AWS::URLSuffix"
+                  },
+                  "/staging"
+                ]
+              ]
+            },
+            "Export": {
+              "Name": "sls-legal-audit-pipeline-staging-ServiceEndpoint"
+            }
+          }
+        }
+      },
+      "vpc": {}
+    },
+    "custom": {
+      "pythonRequirements": {
+        "useUv": true
+      }
+    },
+    "pluginsData": {},
+    "functions": {
+      "ingestAudit": {
+        "handler": "handler.ingest_audit",
+        "events": [
+          {
+            "http": {
+              "path": "audit/submit",
+              "method": "post",
+              "cors": {
+                "origin": "*",
+                "methods": [
+                  "OPTIONS",
+                  "POST"
+                ],
+                "headers": [
+                  "Content-Type",
+                  "X-Amz-Date",
+                  "Authorization",
+                  "X-Api-Key",
+                  "X-Amz-Security-Token",
+                  "X-Amz-User-Agent",
+                  "X-Amzn-Trace-Id"
+                ],
+                "allowCredentials": false
+              },
+              "integration": "AWS_PROXY"
+            }
+          }
+        ],
+        "environment": {
+          "QUEUE_URL": {
+            "$ref": "$[\"service\"][\"provider\"][\"compiledCloudFormationTemplate\"][\"Resources\"][\"IngestAuditLambdaFunction\"][\"Properties\"][\"Environment\"][\"Variables\"][\"QUEUE_URL\"]"
+          }
+        },
+        "name": "legal-audit-pipeline-staging-ingestAudit",
+        "module": ".",
+        "package": {},
+        "memory": 1024,
+        "timeout": 6,
+        "runtime": "python3.12",
+        "vpc": {},
+        "versionLogicalId": "IngestAuditLambdaVersionKDsR0J4pu9uE8b8bd4b3CL6niF3ha26Gp62ueRLHfY"
+      },
+      "processAuditBatch": {
+        "handler": "handler.process_audit_batch",
+        "events": [
+          {
+            "sqs": {
+              "arn": {
+                "$ref": "$[\"service\"][\"provider\"][\"compiledCloudFormationTemplate\"][\"Resources\"][\"IamRoleLambdaExecution\"][\"Properties\"][\"Policies\"][0][\"PolicyDocument\"][\"Statement\"][3][\"Resource\"][0]"
+              },
+              "batchSize": 5
+            }
+          }
+        ],
+        "name": "legal-audit-pipeline-staging-processAuditBatch",
+        "module": ".",
+        "package": {},
+        "memory": 1024,
+        "timeout": 6,
+        "runtime": "python3.12",
+        "vpc": {},
+        "versionLogicalId": "ProcessAuditBatchLambdaVersion02JURpGNG1YbsJHlFsGC9yqzMiyZj8ptp7DpjVgA"
+      }
+    },
+    "resources": {
+      "Resources": {
+        "AuditQueue": {
+          "Type": "AWS::SQS::Queue",
+          "Properties": {
+            "QueueName": "legal-audit-pipeline-audit-queue-staging",
+            "VisibilityTimeout": 90,
+            "RedrivePolicy": {
+              "Fn::Sub": [
+                "{\"deadLetterTargetArn\":\"${dlqArn}\",\"maxReceiveCount\":3}",
+                {
+                  "dlqArn": {
+                    "Fn::GetAtt": [
+                      "AuditDLQ",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "AuditDLQ": {
+          "Type": "AWS::SQS::Queue",
+          "Properties": {
+            "QueueName": "legal-audit-pipeline-audit-dlq-staging"
+          }
+        }
+      },
+      "Outputs": {}
+    },
+    "configValidationMode": "warn",
+    "serviceFilename": "serverless",
+    "initialServerlessConfig": {
+      "org": "thepixelsinc",
+      "service": "legal-audit-pipeline",
+      "provider": {
+        "$ref": "$[\"service\"][\"provider\"]"
+      },
+      "functions": {
+        "$ref": "$[\"service\"][\"functions\"]"
+      },
+      "resources": {
+        "$ref": "$[\"service\"][\"resources\"]"
+      },
+      "custom": {
+        "$ref": "$[\"service\"][\"custom\"]"
+      }
+    },
+    "appId": null,
+    "org": "thepixelsinc",
+    "orgId": null,
+    "layers": {},
+    "artifact": "C:\\Users\\jgpot\\Documents\\legal-audit-pipeline\\.serverless\\legal-audit-pipeline.zip"
+  },
+  "package": {
+    "artifactDirectoryName": "serverless/legal-audit-pipeline/staging/1783947631799-2026-07-13T13:00:31.799Z",
+    "artifact": "legal-audit-pipeline.zip"
+  }
+}

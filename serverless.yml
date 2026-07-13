@@ -1,0 +1,58 @@
+# "org" ensures this Service is used with the correct Serverless Framework Access Key.
+org: thepixelsinc
+service: legal-audit-pipeline
+
+provider:
+  name: aws
+  runtime: python3.12
+  stage: ${opt:stage, 'staging'}
+  region: us-east-1
+  environment:
+    STAGE: ${self:provider.stage}
+    LOG_LEVEL: "INFO"
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - sqs:SendMessage
+          Resource: !GetAtt AuditQueue.Arn
+
+functions:
+  ingestAudit:
+    handler: handler.ingest_audit
+    events:
+      - http:
+          path: audit/submit
+          method: post
+          cors: true
+    environment:
+      QUEUE_URL: !Ref AuditQueue
+
+  processAuditBatch:
+    handler: handler.process_audit_batch
+    events:
+      - sqs:
+          arn: !GetAtt AuditQueue.Arn
+          batchSize: 5
+
+resources:
+  Resources:
+    AuditQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-audit-queue-${self:provider.stage}
+        VisibilityTimeout: 90
+        RedrivePolicy:
+          Fn::Sub:
+            - '{"deadLetterTargetArn":"${dlqArn}","maxReceiveCount":3}'
+            - dlqArn: !GetAtt AuditDLQ.Arn
+
+    AuditDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: ${self:service}-audit-dlq-${self:provider.stage}
+
+custom:
+  pythonRequirements:
+    useUv: true
